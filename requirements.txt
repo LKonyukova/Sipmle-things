@@ -1,9 +1,11 @@
 matplotlib
+pyplot
 streamlit
 pandas
 numpy
 seaborn
 datetime
+timedelta
 gdown
 warnings
 yadisk
