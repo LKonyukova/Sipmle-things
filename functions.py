@@ -13,7 +13,7 @@ def to_countplot_rfm(df):
 
     order = df['rfm'].value_counts().index
     # order = df['rfm'].sort_values().unique() - лексикографический порядок
-    ax = sns.countplot(x = 'rfm', data = df, order = order)
+    ax = sns.countplot(x = 'rfm', data = df, order = order, palette='pastel')
 
     ax.set_title('График распределения RFM по количеству человек')
     ax.set_xlabel('RFM')
@@ -61,8 +61,12 @@ def get_retention(profiles):
 
     # собираем «сырые» данные для расчёта удержания
     result_raw = profiles[['customer', 'first_ts', 'last_ts', 'first_dt', 'first_month']].copy()
-    result_raw['lifetime_months'] = ((result_raw['last_ts'] - result_raw['first_ts'] + timedelta(days=1)) / np.timedelta64(1, 'M')).round().astype('int')
+    # устарело #result_raw['lifetime_months'] = ((result_raw['last_ts'] - result_raw['first_ts'] + timedelta(days=1)) / np.timedelta64(1, 'M')).round().astype('int')
     #result_raw['lifetime_days'] = (result_raw['last_ts'] - result_raw['first_ts'] + timedelta(days=1)).dt.days
+    # Вычисляем разницу в днях
+    delta_days = (result_raw['last_ts'] - result_raw['first_ts'] + timedelta(days=1)) / np.timedelta64(1, 'D')
+    # Преобразуем дни в месяцы, используя среднее количество дней в месяце (30.44)
+    result_raw['lifetime_months'] = (delta_days / 30.44).round().astype('int')
 
     # рассчитываем удержание
     result_grouped = result_raw.pivot_table(index=['first_month'], columns='lifetime_months', values='customer', aggfunc='nunique')
@@ -105,9 +109,10 @@ def get_ltv(
     )
 
     # Шаг 3. рассчитываем лайфтайм пользователя для каждой покупки
-    result_raw['lifetime_months'] = (
-        (result_raw['last_ts'] - result_raw['first_ts'] + timedelta(days=1)) / np.timedelta64(1, 'M')
-    ).round().astype('int')
+    # Вычисляем разницу в днях
+    delta_days = (result_raw['last_ts'] - result_raw['first_ts'] + timedelta(days=1)) / np.timedelta64(1, 'D')
+    # Преобразуем дни в месяцы, используя среднее количество дней в месяце (30.44)
+    result_raw['lifetime_months'] = (delta_days / 30.44).round().astype('int')
     
     result_raw['lifetime_days'] = (
         result_raw['last_ts'] - result_raw['first_ts'] + timedelta(days=1)

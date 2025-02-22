@@ -1,0 +1,9 @@
+matplotlib
+streamlit
+pandas
+numpy
+seaborn
+datetime
+gdown
+warnings
+yadisk

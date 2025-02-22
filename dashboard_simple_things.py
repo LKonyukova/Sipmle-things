@@ -1,13 +1,11 @@
-#pip install gdown openpyxl # загрузка файла из google диска/ чтение xlsx файла
-
 import streamlit as st
 import pandas as pd
 import numpy as np
 from matplotlib import pyplot as plt
-import plotly.express as px #???
 import seaborn as sns
 from datetime import datetime, timedelta
 import gdown
+import yadisk
 import functions
 
 import warnings 
@@ -25,26 +23,39 @@ descr = st.sidebar.button('Описание')
 if descr:
     st.markdown(f'''
     Аналитическая панель включает в себя RFM-анализ, когортный анализ, маркетинговый анализ и дополнительные наблюдения.
-    Для перехода между страницами используйте меню слева.''')
+    
+    Для перехода между страницами используйте меню слева.\n
+        (для корректного отображения выводов выберите светлую тему)''')
 
 ### ПРЕДОБРАБОТКА ###
 
 # Загрузка файла с Google Диска
 # Идентификатор файла
-file_id = '12zR3a9L1q60wf-XxZkiXeTOzhXKk9j2C'
-
+#file_id = '12zR3a9L1q60wf-XxZkiXeTOzhXKk9j2C'
 # Формирование URL для загрузки
-url = f'https://drive.google.com/uc?id={file_id}'
+#url = f'https://drive.google.com/uc?id={file_id}'
+#output = 'payments_2024_01_07.xlsx'
+# Загрузка файла
+#gdown.download(url, output, quiet=False)
 
-output = 'payments_2024_01_07.xlsx'
+# Локальная загрузка
+# #data = pd.read_excel("C:\\Users\\lyubo\\Downloads\\Код\\Мастерская\\Простые вещи\\Данные\\correct_payments.xlsx")
+
+# Загрузка файла с Яндекс Диска
+# Инициализация клиента Яндекс.Диска
+y = yadisk.YaDisk(token="y0__xD3xZdOGN28NSC62bytEh2K0Kc6OCbUhAkUaX0k7SZUeoNL")
+
+# Путь к файлу на Яндекс.Диске
+file_path = "/Аналитика/Мастерская, Простые вещи/payments_2024_01_07.xlsx"
+
+# Локальное имя файла для сохранения
+output = "payments_2024_01_07.xlsx"
 
 # Загрузка файла
-gdown.download(url, output, quiet=False)
+y.download(file_path, output)
 
 # Чтение Excel-файла
 data = pd.read_excel(output, engine='openpyxl')
-
-#data = pd.read_excel("C:\\Users\\lyubo\\Downloads\\Код\\Мастерская\\Простые вещи\\Данные\\correct_payments.xlsx")
 
 # Выполним предобработку датафрейма data #
 
