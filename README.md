@@ -1,0 +1,6 @@
+- Prostie_veshchi_v.13.ipynb - само аналитическое исследование
+- dashboard_simple_things.py - аналитическая панель в streamlit
+- functions.py - файл-дополнение к dashboard_simple_things.py, в котором лежат основные функции
+- ipykernel_launcher.py - файл-дополнение к dashboard_simple_things.py, который оберегает от ошибок
+- payments_2024_01_07.xlsx - исходные данные на случай, если яндекс диск больше не даст тянуть из себя файл с данными
+- requirements.txt - файл-дополнение к dashboard_simple_things.py, который обеспечивает согласование библиотек
