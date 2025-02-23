@@ -5,4 +5,4 @@
 |[functions.py](https://github.com/LKonyukova/Sipmle-things/blob/main/functions.py) | Файл-дополнение к dashboard_simple_things.py, в котором лежат основные функции|
 |[ipykernel_launcher.py](https://github.com/LKonyukova/Sipmle-things/blob/main/ipykernel_launcher.py) | Файл-дополнение к dashboard_simple_things.py, который оберегает от ошибок|
 |[payments_2024_01_07.xlsx](https://github.com/LKonyukova/Sipmle-things/blob/main/payments_2024_01_07.xlsx) | Исходные данные на случай, если яндекс диск больше не даст тянуть из себя файл с данными|
-|[requirements.txt](https://github.com/LKonyukova/Sipmle-things/blob/main/requirements.txt) | Файл-дополнение к dashboard_simple_things.py, который обеспечивает согласование библиотек|
+|[requirements.txt](https://github.com/LKonyukova/Sipmle-things/blob/main/requirements.txt) | Файл-дополнение к dashboard_simple_things.py, который обеспечивает согласованность библиотек|
