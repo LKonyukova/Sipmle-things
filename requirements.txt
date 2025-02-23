@@ -1,6 +1,4 @@
-python==3.11.11
 matplotlib
-pyplot
 streamlit==1.42.2
 pandas
 numpy
