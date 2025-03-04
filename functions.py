@@ -49,7 +49,6 @@ def get_profiles(data):
     # и первый день месяца, в который это пожертвование произошло
     # эти данные понадобятся для когортного анализа
     profiles['first_dt'] = profiles['first_ts'].dt.date
-    #profiles['first_month'] = profiles['first_ts'].astype('datetime64[ns]').dt.month
     profiles['first_month'] = profiles['first_ts'].dt.to_period("M")#.astype('datetime64[ns]')
     
     return profiles
@@ -57,50 +56,74 @@ def get_profiles(data):
 
 ####################################################################
 # Retention rate #
-def get_retention(profiles):
+def get_retention(profiles, sessions, observation_date, horizon_months, ignore_horizon=False
+):
+    # Исключаем пользователей, не «доживших» до горизонта анализа
+    last_suitable_acquisition_date = observation_date
+    if not ignore_horizon:
+        last_suitable_acquisition_date = observation_date - pd.DateOffset(months=horizon_months - 1
+        )
+    result_raw = profiles.query('first_month <= @last_suitable_acquisition_date')
 
-    # собираем «сырые» данные для расчёта удержания
-    result_raw = profiles[['customer', 'first_ts', 'last_ts', 'first_dt', 'first_month']].copy()
-    # устарело #result_raw['lifetime_months'] = ((result_raw['last_ts'] - result_raw['first_ts'] + timedelta(days=1)) / np.timedelta64(1, 'M')).round().astype('int')
-    #result_raw['lifetime_days'] = (result_raw['last_ts'] - result_raw['first_ts'] + timedelta(days=1)).dt.days
+    # Собираем «сырые» данные для расчёта удержания
+    result_raw = result_raw.merge(sessions[['customer', 'action_date']], on='customer', how='left')
+
     # Вычисляем разницу в днях
-    delta_days = (result_raw['last_ts'] - result_raw['first_ts'] + timedelta(days=1)) / np.timedelta64(1, 'D')
+    delta_days = (result_raw['action_date'] - result_raw['first_ts'] + timedelta(days=1)) / np.timedelta64(1, 'D')
     # Преобразуем дни в месяцы, используя среднее количество дней в месяце (30.44)
     result_raw['lifetime_months'] = (delta_days / 30.44).round().astype('int')
 
-    # рассчитываем удержание
-    result_grouped = result_raw.pivot_table(index=['first_month'], columns='lifetime_months', values='customer', aggfunc='nunique')
-    
+    # Рассчитываем удержание
+    result_grouped = result_raw.pivot_table(
+        index=['first_month'],
+        columns='lifetime_months',
+        values='customer',
+        aggfunc='nunique'
+    )
+
     cohort_sizes = (
         result_raw.groupby('first_month')
         .agg({'customer': 'nunique'})
         .rename(columns={'customer': 'cohort_size'})
     )
-    
+
     result_grouped = cohort_sizes.merge(
         result_grouped, on='first_month', how='left').fillna(0)
-    
+
     result_grouped = result_grouped.div(result_grouped['cohort_size'], axis=0)
 
-    # восстанавливаем столбец с размерами когорт
+    # Исключаем все лайфтаймы, превышающие горизонт анализа
+    result_grouped = result_grouped[['cohort_size'] + list(range(horizon_months))]
+
+    # Восстанавливаем столбец с размерами когорт
     result_grouped['cohort_size'] = cohort_sizes
 
-    # возвращаем таблицу удержания и сырые данные
-    # сырые данные пригодятся, если нужно будет отыскать ошибку в расчётах
+    # Возвращаем таблицу удержания и сырые данные
+    # Сырые данные пригодятся, если нужно будет отыскать ошибку в расчётах
     return result_raw, result_grouped
 ####################################################################
 
 ####################################################################
 # LTV #
 def get_ltv(
-    profiles,  # Шаг 1. получаем профили и данные о покупках
+    profiles,  # получаем профили и данные о покупках
     purchases, # это data
+    observation_date,
+    horizon_months,
     dimensions=[],
+    ignore_horizon=False
 ):
+    # Исключаем пользователей, не «доживших» до горизонта анализа
+    last_suitable_acquisition_date = observation_date
+    if not ignore_horizon:
+        last_suitable_acquisition_date = observation_date - pd.DateOffset(months=horizon_months - 1
+        )
 
-    # Шаг 2. добавляем данные о покупках в профили
-    
-    result_raw = profiles.copy()
+    result_raw = profiles.query('first_month <= @last_suitable_acquisition_date')
+
+
+    # Добавляем данные о покупках в профили
+
     result_raw = result_raw.merge(
         # добавляем в профили время совершения покупок и выручку
         purchases[['customer', 'action_date', 'final_sum']],
@@ -108,25 +131,21 @@ def get_ltv(
         how='left',
     )
 
-    # Шаг 3. рассчитываем лайфтайм пользователя для каждой покупки
+    # Рассчитываем лайфтайм пользователя для каждой покупки
     # Вычисляем разницу в днях
-    delta_days = (result_raw['last_ts'] - result_raw['first_ts'] + timedelta(days=1)) / np.timedelta64(1, 'D')
+    delta_days = (result_raw['action_date'] - result_raw['first_ts'] + timedelta(days=1)) / np.timedelta64(1, 'D')
     # Преобразуем дни в месяцы, используя среднее количество дней в месяце (30.44)
     result_raw['lifetime_months'] = (delta_days / 30.44).round().astype('int')
-    
-    result_raw['lifetime_days'] = (
-        result_raw['last_ts'] - result_raw['first_ts'] + timedelta(days=1)
-    ).dt.days
-    
-    # группируем по cohort, если в dimensions ничего нет
+
+    # Группируем по cohort, если в dimensions ничего нет
     if len(dimensions) == 0:
         result_raw['cohort'] = 'All donors'
         dimensions = dimensions + ['cohort']
 
-    # функция для группировки таблицы по желаемым признакам
-    def group_by_dimensions(df, dims):
+    # Функция для группировки таблицы по желаемым признакам
+    def group_by_dimensions(df, dims, horizon_months):
 
-        # Шаг 4. строим таблицу выручки
+        # Строим таблицу выручки
         result = df.pivot_table(
             index=dims,
             columns='lifetime_months',
@@ -134,38 +153,40 @@ def get_ltv(
             aggfunc='sum',
         )
 
-        # Шаг 5. считаем сумму выручки с накоплением
+        # Считаем сумму выручки с накоплением
         result = result.fillna(0).cumsum(axis=1)
 
-        # Шаг 6. вычисляем размеры когорт
+        # Вычисляем размеры когорт
         cohort_sizes = (
             result_raw.groupby(dims)
             .agg({'customer': 'nunique'})
             .rename(columns={'customer': 'cohort_size'})
         )
 
-        # Шаг 7. объединяем размеры когорт и таблицу выручки
+        # Объединяем размеры когорт и таблицу выручки
         result = cohort_sizes.merge(result, on=dims, how='left').fillna(0)
 
-        # Шаг 8. считаем LTV
-        # делим каждую «ячейку» в строке на размер когорты
+        # Считаем LTV
+        # Делим каждую «ячейку» в строке на размер когорты
         result = result.div(result['cohort_size'], axis=0)
-        # восстанавливаем размеры когорт
+        # Исключаем все лайфтаймы, превышающие горизонт анализа
+        result = result[['cohort_size'] + list(range(horizon_months))]
+        # Восстанавливаем размеры когорт
         result['cohort_size'] = cohort_sizes
         return result
 
-    # получаем таблицу LTV
-    result_grouped = group_by_dimensions(result_raw, dimensions)
+    # Получаем таблицу LTV
+    result_grouped = group_by_dimensions(result_raw, dimensions, horizon_months)
 
-    # для таблицы динамики LTV убираем 'cohort' из dimensions
+    # Для таблицы динамики LTV убираем 'cohort' из dimensions
     if 'cohort' in dimensions:
         dimensions = []
-    # получаем таблицу динамики LTV
+    # Получаем таблицу динамики LTV
     result_in_time = group_by_dimensions(
-        result_raw, dimensions + ['first_month']
+        result_raw, dimensions + ['first_month'], horizon_months
     )
 
-    # возвращаем обе таблицы LTV и сырые данные
+    # Возвращаем обе таблицы LTV и сырые данные
     return result_raw, result_grouped, result_in_time
 ####################################################################
 
@@ -177,7 +198,7 @@ def to_ret_rate(df):
     # строим тепловую карту удержания
 
     sns.heatmap(
-        df.drop(columns=['cohort_size']),
+        df.drop(columns=['cohort_size', 0]),
         annot=True,
         fmt='.2%',
         ax=plt.subplot(2, 1, 1)
@@ -199,6 +220,8 @@ def to_ret_rate(df):
     )
     plt.xlabel('Лайфтайм (месяц)')
     plt.title('Кривые удержания по месяцам привлечения')
+    
+    plt.xticks(range(0, 6, 1))
 
     return st.pyplot(plt)
 ####################################################################
@@ -234,7 +257,7 @@ def to_avg_bill(df):
 
 ####################################################################
 # Графики LTV #
-def to_ltv(df):
+def to_ltv(df, df_2):
     # Создаем одну фигуру с двумя подграфиками
     fig, axes = plt.subplots(2, 1, figsize=(10, 10))
 
@@ -246,13 +269,13 @@ def to_ltv(df):
     axes[0].set_title('Тепловая карта LTV всех когорт с разбивкой по лайфтаму')
     axes[0].set_xlabel('Лайфтайм (месяц)')
 
-    # Строим кривую LTV без разбивки
-    report = df.drop(columns=['cohort_size'])
+    # Строим кривые LTV
+    report = df_2.drop(columns=['cohort_size'])
     
     report.T.plot(grid=True, 
                   xticks=list(report.columns.values), 
                   ax=axes[1]) 
-    axes[1].set_title('Кривая LTV без разбивки')
+    axes[1].set_title('Кривые LTV')
     axes[1].set_ylabel('LTV, руб')
     axes[1].set_xlabel('Лайфтайм (месяц)')
 
